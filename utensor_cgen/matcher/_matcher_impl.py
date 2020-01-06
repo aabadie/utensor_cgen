@@ -90,10 +90,10 @@ class OpEqualityDelegate(object):
           OperationInfo(
             name=sub_op.name,
             lib_name=sub_op.lib_name,
-            ugraph=sub_op.ugraph,
-            input_tensors=[sub_op.input_tensors[j] for j in perm],
+            ugraph=None,
+            input_tensor_names=[sub_op.input_tensor_names[j] for j in perm],
             n_inputs=sub_op.n_inputs,
-            output_tensors=sub_op.output_tensors,
+            output_tensor_names=sub_op.output_tensor_names[:],
             n_outputs=sub_op.n_outputs,
             op_type=sub_op.op_type,
             op_attr=sub_op.op_attr,
@@ -164,13 +164,14 @@ class uTensorGraphMatcher(object):
       outputs_pool.append(same_ops)
     output_candidates = product(*outputs_pool)
     for outputs in output_candidates:
+      new_ugraph = deepcopy(other_ugraph)
       states = [
         _MatchState(
           match=uTensorGraphMatch(
             pattern_ugraph=self.pattern_ugraph,
-            subject_ugraph=other_ugraph
+            subject_ugraph=new_ugraph
           ),
-          sub_bfs_queue=ops_bfs_queue(other_ugraph, init_nodes=outputs),
+          sub_bfs_queue=ops_bfs_queue(new_ugraph, init_nodes=outputs),
           patrn_bfs_queue=ops_bfs_queue(self.pattern_ugraph),
         )
       ]
@@ -191,6 +192,7 @@ class uTensorGraphMatcher(object):
                 state.match.subj2patrn_tensor_map[subj_tensor.name] = patrn_tensor
                 state.match.patrn2subj_tensor_map[patrn_tensor.name] = subj_tensor
             if input_checked:
+              state.match.subject_ugraph = other_ugraph
               yield state.match
           else:
             states.append(state)
@@ -230,7 +232,9 @@ class uTensorGraphMatcher(object):
       is_eq, eq_ops = OpEqualityDelegate.query(sub_op, patrn_op)
       if is_eq:
         for eq_op in eq_ops:
-          new_sub_bfs_queue = deque(state.sub_bfs_queue)
+          new_subj_graph = deepcopy(match.subject_ugraph)
+          eq_op.move_into(new_subj_graph, force=True)
+          new_sub_bfs_queue = deque([new_subj_graph.ops_map[op.name] for op in state.sub_bfs_queue])
           in_nodes = eq_op.input_nodes
           in_names = set([op.name for op in in_nodes])
           in_idx = 0
@@ -243,11 +247,11 @@ class uTensorGraphMatcher(object):
           new_state = _MatchState(
             match=uTensorGraphMatch(
               pattern_ugraph=match.pattern_ugraph,
-              subject_ugraph=match.subject_ugraph,
-              patrn2subj_op_map={k: v for k, v in match.patrn2subj_op_map.items()},
-              subj2patrn_op_map={k: v for k, v in match.subj2patrn_op_map.items()},
-              patrn2subj_tensor_map={k: v for k, v in match.patrn2subj_tensor_map.items()},
-              subj2patrn_tensor_map={k: v for k, v in match.subj2patrn_tensor_map.items()}
+              subject_ugraph=new_subj_graph,
+              patrn2subj_op_map={k: new_subj_graph.ops_map[v.name] for k, v in match.patrn2subj_op_map.items()},
+              subj2patrn_op_map={k: match.pattern_ugraph.ops_map[v.name] for k, v in match.subj2patrn_op_map.items()},
+              patrn2subj_tensor_map={k: new_subj_graph.tensors_map[v.name] for k, v in match.patrn2subj_tensor_map.items()},
+              subj2patrn_tensor_map={k: match.pattern_ugraph.tensors_map[v.name] for k, v in match.subj2patrn_tensor_map.items()}
             ),
             sub_bfs_queue=new_sub_bfs_queue,
             patrn_bfs_queue=deque(state.patrn_bfs_queue),

@@ -200,7 +200,7 @@ class TensorInfo(IRBase, _NoShallowCopyMixin):
   def __deepcopy__(self, memo):
     new_tensor = TensorInfo(
       name=self.name,
-      ugraph=memo['ugraph'],
+      ugraph=memo.get('ugraph', None),
       op_name=self.op_name,
       dtype=self.dtype,
       shape=deepcopy(self.shape, memo)
@@ -466,10 +466,11 @@ class OperationInfo(IRBase, _NoShallowCopyMixin):
         raise RuntimeError(
           'overwrite existing op: {}'.format(self.name)
         )
+    self._ugraph = ugraph
     for tensor in chain(self.input_tensors, self.output_tensors):
       tensor.move_into(ugraph, force=force)
-    self._ugraph = ugraph
     ugraph.ops_map[self.name] = self
+    ugraph._update_optype_map(self)
   
   def __deepcopy__(self, memo):
     for tensor in chain(self.input_tensors, self.output_tensors):
@@ -483,7 +484,7 @@ class OperationInfo(IRBase, _NoShallowCopyMixin):
       op_type=self.op_type,
       lib_name=self.lib_name,
       op_attr=deepcopy(self.op_attr, memo),
-      ugraph=memo['ugraph']
+      ugraph=memo.get('ugraph', None),
     )
     return op_info
 
