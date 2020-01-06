@@ -470,7 +470,6 @@ class OperationInfo(IRBase, _NoShallowCopyMixin):
     for tensor in chain(self.input_tensors, self.output_tensors):
       tensor.move_into(ugraph, force=force)
     ugraph.ops_map[self.name] = self
-    ugraph._update_optype_map(self)
   
   def __deepcopy__(self, memo):
     for tensor in chain(self.input_tensors, self.output_tensors):
@@ -561,7 +560,6 @@ class uTensorGraph(IRBase, _NoShallowCopyMixin, uTensorGraphBuilderMixin):
   # non-init
   topo_order = attr.ib(factory=list, init=False)
   data_manager = attr.ib(default=None, init=False)
-  _type_to_op_map = attr.ib(factory=dict, init=False, repr=False)
 
   def __attrs_post_init__(self):
     if not all(
@@ -576,7 +574,6 @@ class uTensorGraph(IRBase, _NoShallowCopyMixin, uTensorGraphBuilderMixin):
       tensor.move_into(self, force=True)
     for op in self.ops_map.values():
       op.move_into(self, force=True)
-      self._update_optype_map(op)
     if self.is_dangling:
       raise RuntimeError('dangling graph')
 
@@ -595,7 +592,11 @@ class uTensorGraph(IRBase, _NoShallowCopyMixin, uTensorGraphBuilderMixin):
 
     :rtype: List[:class:`.OperationInfo`]
     """
-    return self._type_to_op_map.get(given_op_type, set([]))
+    ops = set()
+    for op in self.ops_map.values():
+      if op.op_type == given_op_type:
+        ops.add(op)
+    return ops
 
   @property
   def output_ops(self):
@@ -753,11 +754,6 @@ class uTensorGraph(IRBase, _NoShallowCopyMixin, uTensorGraphBuilderMixin):
     """
     for op in self.ops_map.values():
       op.move_into(other_ugraph)
-  
-  def _update_optype_map(self, op):
-    if op.op_type not in self._type_to_op_map:
-      self._type_to_op_map[op.op_type] = set()
-    self._type_to_op_map[op.op_type].add(op)
 
   def __deepcopy__(self, memo):
     new_graph = uTensorGraph(
