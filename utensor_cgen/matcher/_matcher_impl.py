@@ -358,7 +358,7 @@ class uTensorGraphMatch(object):
           valid = False
       for out_op in op.output_nodes:
         if out_op.name not in subj_view.ops_map:
-          valid = Falses
+          valid = False
     return valid
     
   def replace_with(self, callback, suffix=None):
@@ -441,12 +441,12 @@ class uTensorGraphMatch(object):
     if len(output_map) != len(subj_graph_view.output_tensors):
       replacible = False
       reasons.append('the number of output tensors does not match')
-    for in_patrn_tensor, _ in input_map.items():
+    for in_patrn_tensor in input_map:
       in_tensor_names = set([t.name for t in self.pattern_ugraph.input_tensors])
       if not in_patrn_tensor.name in in_tensor_names:
         replacible = False
         reasons.append(
-          '{} is not found in the pattern graph'.format(in_patrn_op_name)
+          '{} is not found in the pattern graph'.format(in_patrn_tensor.name)
         )
         continue
     for out_patrn_tensor, _ in output_map.items():
